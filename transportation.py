@@ -25,7 +25,7 @@ class TransportationCell:
         else:
             return f"tmp={self.flow}"
 
-def loadQueueProblemFromFile(filePath):
+def loadProblemFromFile(filePath):
     supply = []
     demand = []
     cost = []
@@ -289,7 +289,7 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    prob = loadQueueProblemFromFile(args.testFile)
+    prob = loadProblemFromFile(args.testFile)
     sol = solve(prob)
     printSolution(sol)
     print(f"cost={getCost(prob, sol)}")
