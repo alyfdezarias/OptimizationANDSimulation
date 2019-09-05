@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import copy
+import random
 import matplotlib.pyplot as plt
 
 def loadTSPfromFile(filePath):
@@ -51,11 +52,15 @@ class TSPProblem:
         return tour, cost
 
     def getNearestNode(self, current, inTour):
-        nextNodes = []
+        nextNodes = self.getCandidateList(current, inTour)
+        return min(nextNodes, key=lambda n: n[1])
+    
+    def getCandidateList(self, current, inTour):
+        candidates = []
         for i in range(len(self.data)):
             if not inTour[i]:
-                nextNodes.append([i, self.distance(current, i)])
-        return min(nextNodes, key=lambda n: n[1])
+                candidates.append([i, self.distance(current, i)])
+        return candidates
 
     def getNearestNodeSolution_multistart(self):
         nodes = []
@@ -63,6 +68,23 @@ class TSPProblem:
             t,c = self.getNearestNodeSolutoin_startingNode(i)
             nodes.append([i,t,c])
         return min(nodes, key=lambda s:s[2])
+
+    def getGreedyRandomizeSolution(self, alpha=0.2):
+        inTour = [False]*len(self.data)
+        startingNode = random.randint(0, len(self.data)-1)
+        inTour[startingNode]=True
+        nodesToAdd = len(self.data)-1
+        current = startingNode
+        tour = [startingNode]
+        while nodesToAdd > 0:
+            candidates = self.getCandidateList(current, inTour)
+            rcl = restrictedCandidateList(candidates, alpha)
+            n = rcl[random.randint(0, len(rcl)-1)]
+            tour.append(n)
+            current = n
+            inTour[current]=True
+            nodesToAdd -=1
+        return tour
 
     def plot_nodes(self):
         plt.clf()
@@ -225,6 +247,46 @@ class TSPProblem:
             tour[xpos + 1: ypos+1] = tour[ypos:xpos:-1]
         return tour
 
+    #ga procedures
+    def generateRandomItem(self, costFnc):
+        tour = [i for i in range(len(self.data))]
+        random.shuffle(tour)
+        return tour, costFnc(tour)
+
+    def orderCrossoverOneSide(self, xTour, yTour):
+        x = 0
+        y = 0
+        while x==y:
+            x = random.randint(0,len(self.data)-1)
+            y = random.randint(0,len(self.data)-1)
+        leftPoint = min(x,y)
+        rightPoint = max(x,y)
+        print(f"l={leftPoint} r={rightPoint}")
+        tour = [-1]*len(self.data)
+        inTour = [False]*len(self.data)
+        #fill center
+        for i in range(leftPoint, rightPoint+1, 1):
+            tour[i] = xTour[i]
+            inTour[tour[i]] = True
+        #fill the rest
+        parentIndex = rightPoint+1 if rightPoint + 1 < len(self.data) else 0
+        offspringIndex = parentIndex
+        nodesToAdd = len(self.data) - rightPoint + leftPoint - 1 #len - (right - left + 1)
+        while nodesToAdd > 0:
+            pNode = yTour[parentIndex]
+            if inTour[pNode]:
+                parentIndex = parentIndex + 1 if parentIndex + 1 < len(self.data) else 0
+                continue
+            else:
+                tour[offspringIndex] = yTour[parentIndex]
+                inTour[tour[offspringIndex]] = True
+                nodesToAdd -= 1
+                parentIndex = parentIndex + 1 if parentIndex + 1 < len(self.data) else 0
+                offspringIndex = offspringIndex + 1 if offspringIndex + 1 < len(self.data) else 0
+        return tour
+
+
+
 def localSearchProcedure(solution, neighborStrategy, explorationCnd):
     while True:
         tmp = copy.copy(solution)
@@ -234,44 +296,93 @@ def localSearchProcedure(solution, neighborStrategy, explorationCnd):
         else:
             solution = newSol
 
-def variableNeighborhoodDescendant(solution, neigborStrategyList, explorationCnd):
+def variableNeighborhoodDescendant(solution, neigborStrategyList, explorationCnd, costFnc):
     n = 0
+    solCost = costFnc(solution)
     while n < len(neigborStrategyList):
         procedure = neigborStrategyList[n]
-        newSol = localSearchProcedure(solution, procedure, explorationCnd)
-        if newSol == solution:
-            n += 1
-        else:
+        tmp = copy.copy(solution)
+        newSol = procedure(tmp, explorationCnd)
+        newCost = costFnc(newSol)
+        if newCost < solCost:
             n = 0
-        solution = newSol
+            solution = newSol
+            solCost = newCost
+        else:
+            n += 1
     return solution
 
+def restrictedCandidateList(candidates, alpha):
+    rcl = []
+    cmin = min(candidates, key=lambda x:x[1])[1]
+    cmax = max(candidates, key=lambda x:x[1])[1]
+    for c in candidates:
+        if c[1] <= cmin + alpha*(cmax-cmin):
+            rcl.append(c[0])
+    return rcl #rcl contains at least one element, the greedy insertion
+
+def grasp(greedySolFnc, costFnc, localSearchFnc, explorationCnd, maxIter, alpha=0.2):
+    bestCost = 1000000000000000000000
+    bestSol = None
+    for i in range(maxIter):
+        sol = greedySolFnc(alpha)
+        newSol = localSearchFnc(sol, explorationCnd)
+        newCost = costFnc(newSol)
+        if newCost < bestCost:
+            bestSol = copy.copy(newSol)
+    return bestSol
+
 def main():
-    tsp = loadTSPfromFile("tspData.dat")
+    tsp = loadTSPfromFile("tspData_6.dat")
     print("Greedy")
     tour, cost = tsp.getNearestNodeSolutoin_startingNode(0)
     print(tour)
     print(cost)
-    tsp.plot_tour(tour, "greedy.png")
+    # tsp.plot_tour(tour, "greedy.png")
     nFnc = [lambda x,e:tsp.local_move(x,e), lambda x,e:tsp.local_swap(x,e), lambda x,e:tsp.local_2opt(x,e)]
     nName = ["localMove.png", "localSwap.png", "local2Opt.png"]
-    for i in range(3):
-        print(f"Local Search {nName[i]}")
-        np = nFnc[i]
-        localtour = localSearchProcedure(tour, np, "FI")
-        print(localtour)
-        print(tsp.getCost(localtour))
-        tsp.plot_tour(localtour, nName[i])
-    print("VND")
-    vndtour = variableNeighborhoodDescendant(tour, nFnc, "FI")
-    print(vndtour)
-    print(tsp.getCost(vndtour))
-    tsp.plot_tour(vndtour, "vnd.png")
-
+    # for i in range(3):
+    #     print(f"Local Search {nName[i]}")
+    #     np = nFnc[i]
+    #     localtour = localSearchProcedure(tour, np, "BI")
+    #     print(localtour)
+    #     print(tsp.getCost(localtour))
+    #     tsp.plot_tour(localtour, nName[i])
+    costFnc = lambda x: tsp.getCost(x)
+    # print("VND")
+    # vndtour = variableNeighborhoodDescendant(tour, nFnc, "FI", costFnc)
+    # print(vndtour)
+    # print(tsp.getCost(vndtour))
+    # tsp.plot_tour(vndtour, "vnd.png")
+    # print("Greedy Randomize Solution")
+    # tour = tsp.getGreedyRandomizeSolution()
+    # print(tour)
+    # print(tsp.getCost(tour))
+    # greedyFnc = lambda alpha: tsp.getGreedyRandomizeSolution(alpha)
+    # print("GRASP")
+    # maxIter = int(len(tsp.data)/2)
+    # for i in range(3):
+    #    print(f"Local Search {nName[i]}")
+    #    tour = grasp(greedyFnc, costFnc, nFnc[i], "FI", maxIter, alpha=0.2)
+    #    print(tour)
+    #    print(tsp.getCost(tour))
+    # print("GRASP + VND")
+    # vndFnc = lambda x, improvement: variableNeighborhoodDescendant(x, nFnc, improvement, costFnc)
+    # tour = grasp(greedyFnc, costFnc, vndFnc, "FI", maxIter)
+    # print(tour)
+    # print(tsp.getCost(tour))
+    # tsp.plot_tour(tour, "grasp_vnd.png")
+    print("GA")
+    x=[0,1,2,3,4,5,6]
+    random.shuffle(x)
+    y=[0,1,2,3,4,5,6]
+    random.shuffle(y)
+    print(x)
+    print(y)
+    tour = tsp.orderCrossoverOneSide(x,y)
+    print(tour)
 
 
     
-    
-
 if __name__ == "__main__":
     main()
