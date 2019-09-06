@@ -3,6 +3,7 @@ import sys
 import math
 import copy
 import random
+import gaProcedure
 import matplotlib.pyplot as plt
 
 def loadTSPfromFile(filePath):
@@ -247,46 +248,6 @@ class TSPProblem:
             tour[xpos + 1: ypos+1] = tour[ypos:xpos:-1]
         return tour
 
-    #ga procedures
-    def generateRandomItem(self, costFnc):
-        tour = [i for i in range(len(self.data))]
-        random.shuffle(tour)
-        return tour, costFnc(tour)
-
-    def orderCrossoverOneSide(self, xTour, yTour):
-        x = 0
-        y = 0
-        while x==y:
-            x = random.randint(0,len(self.data)-1)
-            y = random.randint(0,len(self.data)-1)
-        leftPoint = min(x,y)
-        rightPoint = max(x,y)
-        print(f"l={leftPoint} r={rightPoint}")
-        tour = [-1]*len(self.data)
-        inTour = [False]*len(self.data)
-        #fill center
-        for i in range(leftPoint, rightPoint+1, 1):
-            tour[i] = xTour[i]
-            inTour[tour[i]] = True
-        #fill the rest
-        parentIndex = rightPoint+1 if rightPoint + 1 < len(self.data) else 0
-        offspringIndex = parentIndex
-        nodesToAdd = len(self.data) - rightPoint + leftPoint - 1 #len - (right - left + 1)
-        while nodesToAdd > 0:
-            pNode = yTour[parentIndex]
-            if inTour[pNode]:
-                parentIndex = parentIndex + 1 if parentIndex + 1 < len(self.data) else 0
-                continue
-            else:
-                tour[offspringIndex] = yTour[parentIndex]
-                inTour[tour[offspringIndex]] = True
-                nodesToAdd -= 1
-                parentIndex = parentIndex + 1 if parentIndex + 1 < len(self.data) else 0
-                offspringIndex = offspringIndex + 1 if offspringIndex + 1 < len(self.data) else 0
-        return tour
-
-
-
 def localSearchProcedure(solution, neighborStrategy, explorationCnd):
     while True:
         tmp = copy.copy(solution)
@@ -333,7 +294,7 @@ def grasp(greedySolFnc, costFnc, localSearchFnc, explorationCnd, maxIter, alpha=
     return bestSol
 
 def main():
-    tsp = loadTSPfromFile("tspData_6.dat")
+    tsp = loadTSPfromFile("tspData_38.dat")
     print("Greedy")
     tour, cost = tsp.getNearestNodeSolutoin_startingNode(0)
     print(tour)
@@ -373,14 +334,14 @@ def main():
     # print(tsp.getCost(tour))
     # tsp.plot_tour(tour, "grasp_vnd.png")
     print("GA")
-    x=[0,1,2,3,4,5,6]
-    random.shuffle(x)
-    y=[0,1,2,3,4,5,6]
-    random.shuffle(y)
-    print(x)
-    print(y)
-    tour = tsp.orderCrossoverOneSide(x,y)
-    print(tour)
+    population = 30
+    maxIterations = 1000
+    #localSearchMtFnc = lambda x: variableNeighborhoodDescendant(x, nFnc,"FI", costFnc)
+    localSearchMtFnc = lambda x: tsp.local_move(x, "FI")
+    gaBest = gaProcedure.gaProcedure(population, maxIterations, len(tsp.data), costFnc, localSearchMtFnc)
+    print(gaBest.tour)
+    print(gaBest.cost)
+    tsp.plot_tour(gaBest.tour, "ga.png")
 
 
     
