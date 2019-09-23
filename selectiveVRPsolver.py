@@ -26,7 +26,16 @@ class SelectivePickupDelivery:
     def __init__(self,data):
         self.coordinates = [(d[0],d[1]) for d in data]
         self.demand = [(d[2],d[3]) for d in data]
+        self.__getDistanceMatrix()
     
+    def __getDistanceMatrix(self):
+        self.distanceArray=[]
+        for x in self.coordinates:
+            dist = []
+            for y in self.coordinates:
+                dist.append(math.sqrt(math.pow(x[0]-y[0],2) + math.pow(x[1]-y[1],2)))
+            self.distanceArray.append(dist)
+
     def distance(self, x, y):
         """
             x,y valid index
@@ -37,9 +46,11 @@ class SelectivePickupDelivery:
 
     def getRouteTravelCost(self, tour):
         cost = 0
+        prev = 0
         for i in range(len(tour)):
-            next = i+1 if i+1 < len(tour) else 0
-            cost += self.distance(tour[i].id, tour[next].id)
+            cost += self.distanceArray[prev][tour[i].id]
+            prev = tour[i]
+        cost += self.distanceArray[prev][0]
         return cost
 
     def getSolutionTravelCost(self,routeSet):
@@ -69,11 +80,15 @@ class SelectivePickupDelivery:
             currentLoad += n.pickup
         return tour
 
+    def greedySol_unlimitvehicles(self, capacity):
+        routeSet = []
+        pass
+
+
 
 def main():
     capacity, prob = loadSPDfromFile("spd1.txt")
-    print(capacity)
-    print(prob.demand)
+    print(prob.distanceArray)
     
 if __name__ == "__main__":
     main()
